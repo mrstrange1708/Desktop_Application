@@ -1,0 +1,8 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  color-scheme: light dark;
+}
+body { margin: 0; }
+.page { max-width: 720px; margin: 64px auto; padding: 0 16px; }
+.muted { opacity: 0.6; }
+button { font: inherit; padding: 8px 16px; cursor: pointer; }
