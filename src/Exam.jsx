@@ -77,14 +77,8 @@ export default function Exam({ stream, onFinish }) {
 
   // Rule: leaving the window starts a short grace countdown, coming back cancels it.
   useEffect(() => {
-    const away = () => {
-      window.proctor.log({ type: 'focus-lost' })
-      startFocus(RULES.focusGraceS)
-    }
-    const back = () => {
-      window.proctor.log({ type: 'focus-back' })
-      startFocus(null)
-    }
+    const away = () => startFocus(RULES.focusGraceS) // main logs focus changes itself
+    const back = () => startFocus(null)
     window.addEventListener('blur', away)
     window.addEventListener('focus', back)
     return () => {

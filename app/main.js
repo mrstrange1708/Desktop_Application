@@ -18,6 +18,7 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
+            devTools: !app.isPackaged,
             backgroundThrottling: false // keep timers + audio analysis running while the window is unfocused
         }
     });
@@ -36,6 +37,10 @@ function createWindow() {
         const shortcut = (input.meta || input.control) && input.key.toLowerCase() !== "q";
         if (shortcut || /^F\d+$/.test(input.key)) event.preventDefault();
     });
+
+    // Main records focus changes itself so the log doesn't depend on the renderer.
+    mainWindow.on("blur", () => examActive && writeLog({ type: "focus-lost" }));
+    mainWindow.on("focus", () => examActive && writeLog({ type: "focus-back" }));
 
     mainWindow.on("close", (event) => {
         if (!examActive) return;
@@ -77,6 +82,7 @@ ipcMain.handle("exam:start", () => {
 });
 
 ipcMain.handle("exam:end", () => {
+    writeLog({ type: "exam-end" });
     examActive = false;
     lockWindow(false);
 });
@@ -95,10 +101,15 @@ ipcMain.handle("capture-screen", async () => {
         .map((source, i) => fs.promises.writeFile(path.join(sessionDir, `screen-${stamp}-${i}.jpg`), source.thumbnail.toJPEG(70))));
 });
 
-ipcMain.handle("log", (_event, entry) => {
-    if (!sessionDir || typeof entry?.type !== "string") return;
-    const line = JSON.stringify({ at: new Date().toISOString(), ...entry }) + "\n";
+function writeLog(entry) {
+    if (!sessionDir) return;
+    const line = JSON.stringify({ ...entry, at: new Date().toISOString() }) + "\n"; // main's timestamp always wins
     return fs.promises.appendFile(path.join(sessionDir, "events.jsonl"), line);
+}
+
+ipcMain.handle("log", (_event, entry) => {
+    if (typeof entry?.type !== "string") return;
+    return writeLog(entry);
 });
 
 app.whenReady().then(createWindow);
