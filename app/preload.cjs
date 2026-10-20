@@ -3,10 +3,16 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("proctor", {
-    versions: {
-        electron: process.versions.electron,
-        chrome: process.versions.chrome,
-        node: process.versions.node
-    },
-    ping: () => ipcRenderer.invoke("ping")
+    pickFolder: () => ipcRenderer.invoke("pick-folder"),
+    screenAccess: () => ipcRenderer.invoke("screen-access"),
+    startExam: () => ipcRenderer.invoke("exam:start"),
+    endExam: () => ipcRenderer.invoke("exam:end"),
+    saveCamera: (bytes) => ipcRenderer.invoke("save-camera", bytes),
+    captureScreen: () => ipcRenderer.invoke("capture-screen"),
+    log: (entry) => ipcRenderer.invoke("log", entry),
+    onQuitAttempt: (callback) => {
+        const listener = () => callback();
+        ipcRenderer.on("quit-attempt", listener);
+        return () => ipcRenderer.removeListener("quit-attempt", listener);
+    }
 });

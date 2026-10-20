@@ -26,11 +26,14 @@ mic loudness spikes (Web Audio RMS), post-exam HTML timeline report.
 ## Day 1 — Foundation + Lockdown
 - [x] Tech stack, folders, git, GitHub, Electron + Vite running, IPC smoke test
 - [ ] IPC bridge design: list every main ⇄ renderer channel up front
-- [ ] Lockdown window: kiosk/fullscreen, always-on-top, `setContentProtection(true)`
-      (blocks other apps from screen-recording the exam), no menu / devtools in prod
-- [ ] Block shortcuts: copy/paste, Cmd+Tab/Alt+Tab attempts, Cmd+Q, reload, devtools
-- [ ] Focus loss detection: window `blur`, minimize, leave-fullscreen events
-- [ ] Event logger in main (hash-chained, writes JSONL to userData)
+- [x] Lockdown window: kiosk/fullscreen, always-on-top, `setContentProtection(true)`
+- [x] Block shortcuts (all Cmd/Ctrl combos + F-keys during exam) and copy/cut/paste/right-click/select
+- [x] Focus loss → 3 s grace → UFM
+- [x] Quit attempt (Cmd+Q / close) → 5 s return countdown → UFM; second attempt = UFM
+- [x] Audio: loudness + speech-band + music (spectral flatness) detectors, 3rd warning = UFM
+- [x] Setup screen (evidence folder, camera+mic, screen capture) → rules → exam → result/UFM
+- [x] Camera + screen evidence every 10 s, events.jsonl log in the session folder
+- [ ] Hash-chain the event log
 
 ## Day 2 — Pre-checks + Monitoring
 - [ ] Pre-exam checklist screen: camera, mic, screen permission, single display
