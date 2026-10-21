@@ -42,7 +42,7 @@ PLAN.md           3-day build plan
 ## Session folder
 
 `<chosen folder>/exam-<timestamp>/` holds `camera-*.jpg`, `screen-*.jpg` and `events.jsonl`.
-Each log line has `prev` + `hash` (SHA-256 chain). Main logs focus, shortcuts, idle, displays, start/end itself.
+Each log line has `prev` + `hash` (SHA-256 chain — catches edits, not a full rewrite; needs server anchoring). Unchanged screenshots are skipped (logged as `screen-skipped`) but one is forced every 60 s. Main logs focus, shortcuts, idle, displays, start/end itself.
 
 ## Tests
 

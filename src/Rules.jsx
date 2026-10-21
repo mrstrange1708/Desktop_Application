@@ -35,7 +35,7 @@ export default function Rules({ onStart }) {
           <li>Keep your surroundings quiet. Talking, music or loud noise gives a warning; the <strong>{ordinal(RULES.maxAudioWarnings)} warning</strong> is UFM.</li>
           <li>Copy, cut, paste, right-click, keyboard shortcuts and screenshots are disabled.</li>
           <li>Only one display may be connected, and screen-sharing, messaging or AI apps must stay closed.</li>
-          <li>Your camera and screen are captured every {RULES.snapshotEveryS} seconds and saved with a tamper-evident event log.</li>
+          <li>Your camera and screen are captured every {RULES.snapshotEveryS} seconds and saved with a hash-chained event log.</li>
           <li>An integrity score tracks every flagged event and is included in your result.</li>
           <li>Stay in front of the camera for the whole exam.</li>
         </ol>

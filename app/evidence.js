@@ -1,4 +1,4 @@
-// evidence.js — tamper-evident event log + perceptual screen hashing
+// evidence.js — hash-chained event log + perceptual screen hashing
 import crypto from "crypto";
 
 export const GENESIS = "0".repeat(64);

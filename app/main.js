@@ -6,7 +6,10 @@ import { GENESIS, chainEntry, verifyChain, grayFromBitmap, dHash, hamming } from
 import { runningRestrictedApps } from "./processes.js";
 
 const IDLE_LIMIT_S = 120;     // no keyboard/mouse input for this long gets logged
-const SCREEN_CHANGE_BITS = 4; // ponytail: dHash distance that counts as "screen changed", tune if too chatty
+// ponytail: 9x8 whole-screen dHash can miss small changes (a chat popup), hence the forced
+// save every SCREEN_FORCE_SAVE_MS; switch to per-region hashes if that proves too coarse.
+const SCREEN_CHANGE_BITS = 4;          // dHash distance that counts as "screen changed"
+const SCREEN_FORCE_SAVE_MS = 60_000;   // save at least this often even when nothing changed
 
 let mainWindow = null;
 let examActive = false;
@@ -14,7 +17,7 @@ let chosenFolder = null; // picked by the student on the setup screen
 let sessionDir = null;   // <chosenFolder>/exam-<timestamp>, created when the exam starts
 let lastHash = GENESIS;  // head of the events.jsonl hash chain
 let idleTimer = null;
-const lastScreenHash = new Map(); // display id → dHash of the last saved screenshot
+const lastScreenSave = new Map(); // display id → { hash, at } of the last saved screenshot
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -118,7 +121,7 @@ ipcMain.handle("exam:start", async () => {
     sessionDir = path.join(chosenFolder, `exam-${new Date().toISOString().replace(/[:.]/g, "-")}`);
     fs.mkdirSync(sessionDir, { recursive: true });
     lastHash = GENESIS;
-    lastScreenHash.clear();
+    lastScreenSave.clear();
     writeLog({ type: "exam-start" });
     examActive = true;
     lockWindow(true);
@@ -138,16 +141,23 @@ ipcMain.handle("save-camera", (_event, bytes) => {
     return fs.promises.writeFile(path.join(sessionDir, `camera-${Date.now()}.jpg`), bytes);
 });
 
-// Screenshots every display but only saves the ones whose content changed since the last save.
+// Screenshots every display; saves when the content changed or the last save is older than
+// SCREEN_FORCE_SAVE_MS. Skipped captures are logged with their distance so gaps are auditable.
 ipcMain.handle("capture-screen", async () => {
     if (!sessionDir) return;
     const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 1280, height: 800 } });
     const stamp = Date.now();
     await Promise.all(sources.filter((source) => !source.thumbnail.isEmpty()).map((source, i) => {
         const hash = dHash(grayFromBitmap(source.thumbnail.resize({ width: 9, height: 8 }).toBitmap()));
-        const previous = lastScreenHash.get(source.display_id);
-        if (previous !== undefined && hamming(previous, hash) <= SCREEN_CHANGE_BITS) return;
-        lastScreenHash.set(source.display_id, hash);
+        const last = lastScreenSave.get(source.display_id);
+        if (last && stamp - last.at < SCREEN_FORCE_SAVE_MS) {
+            const distance = hamming(last.hash, hash);
+            if (distance <= SCREEN_CHANGE_BITS) {
+                writeLog({ type: "screen-skipped", display: i, hash: hash.toString(16), distance });
+                return;
+            }
+        }
+        lastScreenSave.set(source.display_id, { hash, at: stamp });
         return fs.promises.writeFile(path.join(sessionDir, `screen-${stamp}-${i}.jpg`), source.thumbnail.toJPEG(70));
     }));
 });

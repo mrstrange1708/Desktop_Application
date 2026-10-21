@@ -26,7 +26,7 @@ export default function Result({ status, reason, score, total, lowestIntegrity, 
           <div>
             <dt>Event log</dt>
             <dd className={log && !log.ok ? 'error' : ''}>
-              {log === null ? 'Checking…' : log.ok ? `Verified · ${log.entries} entries` : `Modified at entry ${log.brokenAt}`}
+              {log === null ? 'Checking…' : log.ok ? `Chain intact · ${log.entries} entries` : `Chain broken at entry ${log.brokenAt}`}
             </dd>
           </div>
         </dl>
