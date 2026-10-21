@@ -4,6 +4,19 @@ import { EXAM, RULES } from './exam.js'
 export default function Rules({ onStart }) {
   const [agreed, setAgreed] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [error, setError] = useState('')
+
+  // Main re-runs the system check and may refuse to start.
+  async function start() {
+    setStarting(true)
+    setError('')
+    try {
+      await onStart()
+    } catch (e) {
+      setError(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+      setStarting(false)
+    }
+  }
 
   return (
     <div className="screen">
@@ -20,8 +33,10 @@ export default function Rules({ onStart }) {
           <li>If the exam window loses focus for more than <strong>{RULES.focusGraceS} seconds</strong>, you are marked UFM.</li>
           <li>If you try to quit, you have <strong>{RULES.quitGraceS} seconds</strong> to return. Not returning, or trying to quit again, is UFM.</li>
           <li>Keep your surroundings quiet. Talking, music or loud noise gives a warning; the <strong>{ordinal(RULES.maxAudioWarnings)} warning</strong> is UFM.</li>
-          <li>Copy, cut, paste, right-click and screenshots are disabled.</li>
-          <li>Your camera and screen are captured every {RULES.snapshotEveryS} seconds and saved with an event log.</li>
+          <li>Copy, cut, paste, right-click, keyboard shortcuts and screenshots are disabled.</li>
+          <li>Only one display may be connected, and screen-sharing, messaging or AI apps must stay closed.</li>
+          <li>Your camera and screen are captured every {RULES.snapshotEveryS} seconds and saved with a tamper-evident event log.</li>
+          <li>An integrity score tracks every flagged event and is included in your result.</li>
           <li>Stay in front of the camera for the whole exam.</li>
         </ol>
 
@@ -30,11 +45,13 @@ export default function Rules({ onStart }) {
           I have read the rules and agree to be monitored.
         </label>
 
+        {error && <p className="error" role="alert">{error}</p>}
+
         <div className="card-actions">
           <button
             className="btn btn-primary"
             disabled={!agreed || starting}
-            onClick={() => { setStarting(true); onStart() }}
+            onClick={start}
           >
             {starting ? 'Starting…' : 'Start exam'}
           </button>

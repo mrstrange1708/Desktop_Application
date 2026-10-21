@@ -25,7 +25,7 @@ mic loudness spikes (Web Audio RMS), post-exam HTML timeline report.
 
 ## Day 1 — Foundation + Lockdown
 - [x] Tech stack, folders, git, GitHub, Electron + Vite running, IPC smoke test
-- [ ] IPC bridge design: list every main ⇄ renderer channel up front
+- [x] IPC bridge design: channel table in README
 - [x] Lockdown window: kiosk/fullscreen, always-on-top, `setContentProtection(true)`
 - [x] Block shortcuts (all Cmd/Ctrl combos + F-keys during exam) and copy/cut/paste/right-click/select
 - [x] Focus loss → 3 s grace → UFM
@@ -33,15 +33,16 @@ mic loudness spikes (Web Audio RMS), post-exam HTML timeline report.
 - [x] Audio: loudness + speech-band + music (spectral flatness) detectors, 3rd warning = UFM
 - [x] Setup screen (evidence folder, camera+mic, screen capture) → rules → exam → result/UFM
 - [x] Camera + screen evidence every 10 s, events.jsonl log in the session folder
-- [ ] Hash-chain the event log
+- [x] Hash-chain the event log (unkeyed — needs server anchoring, see below)
 
 ## Day 2 — Pre-checks + Monitoring
-- [ ] Pre-exam checklist screen: camera, mic, screen permission, single display
-      (`screen.getAllDisplays()`), no blacklisted apps running (process list)
-- [ ] Periodic camera snapshot + screenshot (desktopCapturer) with dHash de-dup
-- [ ] Clipboard watch + paste detection, idle detection (`powerMonitor`)
-- [ ] Integrity Score engine + live meter + warning modals
-- [ ] Keystroke dynamics: calibration step + outlier flagging
+- [x] System check: single display + restricted apps (setup screen, re-checked by main at start)
+- [x] Screenshots de-duplicated with dHash (only saved when the screen changed)
+- [x] Paste blocked (Day 1); idle > 120 s logged via `powerMonitor`; display plugged in mid-exam logged
+- [x] Integrity score engine (half-life decay) + live meter + lowest score on result
+- [x] Result screen verifies the log chain
+- [ ] Keystroke dynamics — skipped: exam is MCQ-only, no typing to measure. Revisit if we add written answers
+- [ ] Server anchoring: send final log hash + entry count with the submission (backend)
 
 ## Day 3 — Exam flow + Polish + Ship
 - [ ] Exam UI: questions, countdown timer, autosave, submit / auto-submit on threshold

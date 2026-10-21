@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { EXAM, RULES } from './exam.js'
 import { CALIBRATION_FRAMES, FRAME_MS, analyzeFrame, calibrate, createSustainGate, rmsDb } from './audio.js'
+import { integrityScore } from './integrity.js'
 
 // Wall-clock countdown. start(seconds) begins it, start(null) cancels it; onExpire runs once at 0.
 function useCountdown(onExpire) {
@@ -46,9 +47,15 @@ export default function Exam({ stream, onFinish }) {
   const [banner, setBanner] = useState('')
   const [calibrating, setCalibrating] = useState(true)
   const [confirming, setConfirming] = useState(false)
+  const [events, setEvents] = useState([]) // every logged event, pushed back from main
   const videoRef = useRef(null)
   const ended = useRef(false)
   const warningCount = useRef(0)
+  const lowestIntegrity = useRef(100)
+
+  // Re-computed on every render; the exam clock re-renders 4×/s, so the decay animates on its own.
+  const integrity = integrityScore(events, Date.now())
+  lowestIntegrity.current = Math.min(lowestIntegrity.current, integrity)
 
   const [timeLeft, startTimer] = useCountdown(() => end('submitted', 'Time is up'))
   const [focusLeft, startFocus] = useCountdown(() => ufm(`Left the exam window for more than ${RULES.focusGraceS} seconds`))
@@ -61,7 +68,7 @@ export default function Exam({ stream, onFinish }) {
     ended.current = true
     const score = status === 'ufm' ? 0 : EXAM.questions.filter((q) => answers[q.id] === q.answer).length
     window.proctor.log({ type: status, reason, score })
-    onFinish({ status, reason, score, total: EXAM.questions.length })
+    onFinish({ status, reason, score, total: EXAM.questions.length, lowestIntegrity: lowestIntegrity.current })
   }
 
   function ufm(reason) {
@@ -74,6 +81,10 @@ export default function Exam({ stream, onFinish }) {
     videoRef.current.srcObject = stream
     startTimer(EXAM.durationMin * 60)
   }, [stream])
+
+  useEffect(() => window.proctor.onEvent(({ type, at }) => {
+    setEvents((list) => [...list, { type, at: Date.parse(at) }])
+  }), [])
 
   // Rule: leaving the window starts a short grace countdown, coming back cancels it.
   useEffect(() => {
@@ -166,6 +177,12 @@ export default function Exam({ stream, onFinish }) {
           <span className="muted"> · {answered} of {total} answered</span>
         </div>
         <div className="bar-right">
+          <span
+            className={`chip ${integrity >= 80 ? 'chip-ok' : integrity >= 50 ? 'chip-warn' : 'chip-danger'}`}
+            title="Drops with every flagged event and recovers over time"
+          >
+            Integrity {integrity}%
+          </span>
           <span className={`chip ${warnings ? 'chip-warn' : ''}`}>
             {calibrating ? 'Calibrating mic — stay quiet' : `Audio warnings ${warnings}/${RULES.maxAudioWarnings}`}
           </span>

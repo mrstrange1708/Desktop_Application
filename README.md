@@ -22,4 +22,29 @@ src/              React renderer (UI)
 index.html        Vite entry
 PLAN.md           3-day build plan
 ```
-# Desktop_Application
+
+## IPC channels (`window.proctor`)
+
+| Call | Channel | Direction | What it does |
+|---|---|---|---|
+| `pickFolder()` | `pick-folder` | UI → main | Folder dialog; where evidence is saved |
+| `screenAccess()` | `screen-access` | UI → main | Triggers / reads macOS Screen Recording permission |
+| `systemCheck()` | `system-check` | UI → main | `{ displays, restricted }` — display count + restricted apps running |
+| `startExam()` | `exam:start` | UI → main | Re-runs system check, creates session folder, kiosk + content protection |
+| `endExam()` | `exam:end` | UI → main | Unlocks the window, stops idle watch |
+| `saveCamera(bytes)` | `save-camera` | UI → main | Saves a JPEG camera frame |
+| `captureScreen()` | `capture-screen` | UI → main | Screenshots displays, saves only if changed (dHash) |
+| `log(entry)` | `log` | UI → main | Appends a hash-chained line to `events.jsonl` |
+| `verifyLog()` | `verify-log` | UI → main | Re-verifies the hash chain |
+| `onQuitAttempt(cb)` | `quit-attempt` | main → UI | Cmd+Q / close during the exam |
+| `onEvent(cb)` | `proctor-event` | main → UI | Every logged event (feeds the integrity meter) |
+
+## Session folder
+
+`<chosen folder>/exam-<timestamp>/` holds `camera-*.jpg`, `screen-*.jpg` and `events.jsonl`.
+Each log line has `prev` + `hash` (SHA-256 chain). Main logs focus, shortcuts, idle, displays, start/end itself.
+
+## Tests
+
+`npm test` — audio detectors, integrity score, hash chain, dHash, restricted-app parser.
+

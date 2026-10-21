@@ -18,6 +18,7 @@ export default function Setup({ onReady }) {
   const [stream, setStream] = useState(null)
   const [mediaError, setMediaError] = useState('')
   const [screen, setScreen] = useState(null)
+  const [system, setSystem] = useState(null) // { displays, restricted } from main
   const videoRef = useRef(null)
 
   useEffect(() => {
@@ -34,6 +35,11 @@ export default function Setup({ onReady }) {
   }
 
   const mic = stream?.getAudioTracks()[0]?.label
+  const systemIssues = system && [
+    system.displays > 1 && `Disconnect extra displays (${system.displays} connected).`,
+    system.restricted.length > 0 && `Quit these apps: ${system.restricted.join(', ')}.`,
+  ].filter(Boolean).join(' ')
+  const systemOk = system !== null && !systemIssues
 
   return (
     <div className="screen">
@@ -73,10 +79,23 @@ export default function Setup({ onReady }) {
               <button className="btn" onClick={async () => setScreen(await window.proctor.screenAccess())}>Check access</button>
             )}
           </Check>
+
+          <Check
+            done={systemOk}
+            title="System check"
+            detail={system === null ? 'Only one display, and no screen-sharing, messaging or AI apps running.' : systemOk ? 'One display, no restricted apps' : ''}
+            error={systemIssues}
+          >
+            {!systemOk && (
+              <button className="btn" onClick={async () => setSystem(await window.proctor.systemCheck())}>
+                {system ? 'Check again' : 'Run check'}
+              </button>
+            )}
+          </Check>
         </ol>
 
         <div className="card-actions">
-          <button className="btn btn-primary" disabled={!folder || !stream} onClick={() => onReady(stream)}>
+          <button className="btn btn-primary" disabled={!folder || !stream || !systemOk} onClick={() => onReady(stream)}>
             Continue to rules
           </button>
         </div>

@@ -7,6 +7,9 @@ const sha256 = (text) => crypto.createHash("sha256").update(text).digest("hex");
 
 // Every entry stores the previous entry's hash, so editing, deleting or reordering
 // any line breaks every hash after it.
+// ponytail: unkeyed — someone who rewrites the whole file can recompute it, and cutting
+// lines off the end is invisible. Send the final hash + entry count to the server at submit
+// (or HMAC with a server-issued session key) to make it real evidence.
 export function chainEntry(prevHash, entry) {
     const body = { ...entry, prev: prevHash };
     return { ...body, hash: sha256(JSON.stringify(body)) };

@@ -13,7 +13,6 @@ function App() {
 
   async function startExam() {
     setSessionDir(await window.proctor.startExam())
-    window.proctor.log({ type: 'exam-start' })
     setStage('exam')
   }
 
