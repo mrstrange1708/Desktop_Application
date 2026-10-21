@@ -39,6 +39,10 @@ function createWindow() {
     } else {
         mainWindow.loadURL("http://localhost:5173");
         mainWindow.webContents.openDevTools();
+        // Devtools closes during the exam, so mirror renderer warnings/errors to the terminal.
+        mainWindow.webContents.on("console-message", (event) => {
+            if (event.level === "warning" || event.level === "error") console.log(`[renderer ${event.level}] ${event.message}`);
+        });
     }
 
     // During the exam swallow every Cmd/Ctrl shortcut (copy, paste, reload, devtools, hide, minimize…)
@@ -145,6 +149,14 @@ ipcMain.handle("save-camera", (_event, bytes) => {
 // SCREEN_FORCE_SAVE_MS. Skipped captures are logged with their distance so gaps are auditable.
 ipcMain.handle("capture-screen", async () => {
     if (!sessionDir) return;
+    try {
+        await captureScreens();
+    } catch (error) {
+        writeLog({ type: "capture-error", source: "screen", message: error.message });
+    }
+});
+
+async function captureScreens() {
     const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 1280, height: 800 } });
     const stamp = Date.now();
     await Promise.all(sources.filter((source) => !source.thumbnail.isEmpty()).map((source, i) => {
@@ -160,7 +172,7 @@ ipcMain.handle("capture-screen", async () => {
         lastScreenSave.set(source.display_id, { hash, at: stamp });
         return fs.promises.writeFile(path.join(sessionDir, `screen-${stamp}-${i}.jpg`), source.thumbnail.toJPEG(70));
     }));
-});
+}
 
 ipcMain.handle("log", (_event, entry) => {
     if (typeof entry?.type !== "string") return;

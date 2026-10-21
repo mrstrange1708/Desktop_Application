@@ -27,15 +27,20 @@ function useCountdown(onExpire) {
 }
 
 // One camera frame + one screenshot of every display, saved by main into the session folder.
+// A failed camera capture is itself evidence (camera covered / unplugged), so it gets logged.
 async function captureEvidence(video) {
   window.proctor.captureScreen()
-  if (!video?.videoWidth) return
-  const canvas = document.createElement('canvas')
-  canvas.width = video.videoWidth
-  canvas.height = video.videoHeight
-  canvas.getContext('2d').drawImage(video, 0, 0)
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8))
-  window.proctor.saveCamera(new Uint8Array(await blob.arrayBuffer()))
+  try {
+    if (!video?.videoWidth) throw new Error('no camera frame')
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8))
+    await window.proctor.saveCamera(new Uint8Array(await blob.arrayBuffer()))
+  } catch (error) {
+    window.proctor.log({ type: 'capture-error', source: 'camera', message: error.message })
+  }
 }
 
 const clock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -113,10 +118,16 @@ export default function Exam({ stream, onFinish }) {
     return () => events.forEach((type) => document.removeEventListener(type, block))
   }, [])
 
-  // Periodic camera + screen evidence
+  // Camera + screen evidence: once the camera has a frame, then every snapshotEveryS
   useEffect(() => {
-    const id = setInterval(() => captureEvidence(videoRef.current), RULES.snapshotEveryS * 1000)
-    return () => clearInterval(id)
+    const video = videoRef.current
+    const first = () => captureEvidence(video)
+    video.addEventListener('loadeddata', first, { once: true })
+    const id = setInterval(() => captureEvidence(video), RULES.snapshotEveryS * 1000)
+    return () => {
+      video.removeEventListener('loadeddata', first)
+      clearInterval(id)
+    }
   }, [])
 
   // Rule: background audio → warning; the last allowed warning is UFM.
