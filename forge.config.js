@@ -1,5 +1,6 @@
 // Electron Forge: `npm run make` → out/make/dmg/<arch>/Exam Proctor-<version>-<arch>.dmg
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { FusesPlugin } from '@electron-forge/plugin-fuses'
@@ -22,15 +23,22 @@ export default {
       NSMicrophoneUsageDescription: 'Your microphone is used to detect talking or background audio during the exam.',
     },
   },
-  makers: [new MakerDMG({ format: 'ULFO', icon: 'build/icon.icns' }, ['darwin'])],
+  // ULMO = LZMA, ~20% smaller than the default lzfse (89 MB vs 113 MB with locales stripped)
+  makers: [new MakerDMG({ format: 'ULMO', icon: 'build/icon.icns' }, ['darwin'])],
   hooks: {
-    // extendInfo edits Info.plist after Electron's ad-hoc signature, which macOS then reports as
-    // "damaged" on other machines. Re-sign ad-hoc so the bundle verifies.
-    // ponytail: ad-hoc only; a Developer ID + notarization is needed to open without a Gatekeeper prompt
     postPackage: async (_config, { platform, outputPaths }) => {
       if (platform !== 'darwin') return
       for (const dir of outputPaths) {
-        execFileSync('codesign', ['--force', '--deep', '--sign', '-', path.join(dir, 'Exam Proctor.app')])
+        const appPath = path.join(dir, 'Exam Proctor.app')
+        // The UI is English only: drop Chromium's other 218 locale packs (~48 MB unpacked).
+        const resources = path.join(appPath, 'Contents/Frameworks/Electron Framework.framework/Versions/A/Resources')
+        for (const entry of fs.readdirSync(resources)) {
+          if (entry.endsWith('.lproj') && entry !== 'en.lproj' && entry !== 'Base.lproj') fs.rmSync(path.join(resources, entry), { recursive: true })
+        }
+        // extendInfo (and the locale strip) change the bundle after Electron's ad-hoc signature,
+        // which macOS reports as "damaged" elsewhere, so re-sign ad-hoc.
+        // ponytail: ad-hoc only; a Developer ID + notarization is needed to open without a Gatekeeper prompt
+        execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath])
       }
     },
   },
