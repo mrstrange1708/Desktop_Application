@@ -237,6 +237,9 @@ handle("session-report", () => {
 handle("open-session", () => sessionDir && shell.openPath(sessionDir));
 
 app.whenReady().then(() => {
+    // The packaged app gets its icon from the bundle; in dev, show it in the Dock too.
+    if (!app.isPackaged && process.platform === "darwin") app.dock.setIcon(path.join(import.meta.dirname, "../build/icon.png"));
+
     // app://bundle/<path> → dist/<path>, never anything outside dist.
     protocol.handle("app", (request) => {
         const file = path.join(DIST_DIR, decodeURIComponent(new URL(request.url).pathname));

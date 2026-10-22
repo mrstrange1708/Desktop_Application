@@ -14,6 +14,7 @@ export default {
   packagerConfig: {
     name: 'Exam Proctor',
     appBundleId: 'com.examproctor.desktop',
+    icon: 'build/icon', // build/icon.icns, generated from src/assets/logo.svg by `npm run icon`
     asar: true,
     ignore,
     extendInfo: {
@@ -21,7 +22,7 @@ export default {
       NSMicrophoneUsageDescription: 'Your microphone is used to detect talking or background audio during the exam.',
     },
   },
-  makers: [new MakerDMG({ format: 'ULFO' }, ['darwin'])],
+  makers: [new MakerDMG({ format: 'ULFO', icon: 'build/icon.icns' }, ['darwin'])],
   hooks: {
     // extendInfo edits Info.plist after Electron's ad-hoc signature, which macOS then reports as
     // "damaged" on other machines. Re-sign ad-hoc so the bundle verifies.
