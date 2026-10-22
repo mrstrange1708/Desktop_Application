@@ -9,6 +9,7 @@ export const WEIGHTS = {
   'focus-lost': 15,
   'quit-attempt': 25,
   'audio-warning': 25,
+  'face-warning': 25,
   'display-added': 30,
   'blocked-shortcut': 5,
   idle: 10,

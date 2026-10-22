@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { EXAM, RULES } from './exam.js'
 import { CALIBRATION_FRAMES, FRAME_MS, analyzeFrame, calibrate, createSustainGate, rmsDb } from './audio.js'
 import { integrityScore } from './integrity.js'
+import { FACE_CHECK_MS, createFaceRule, loadFaceDetector } from './face.js'
 
 // Wall-clock countdown. start(seconds) begins it, start(null) cancels it; onExpire runs once at 0.
 function useCountdown(onExpire) {
@@ -53,9 +54,12 @@ export default function Exam({ stream, onFinish }) {
   const [calibrating, setCalibrating] = useState(true)
   const [confirming, setConfirming] = useState(false)
   const [events, setEvents] = useState([]) // every logged event, pushed back from main
+  const [faces, setFaces] = useState(undefined) // undefined = loading, null = detector unavailable
+  const [faceWarnings, setFaceWarnings] = useState(0)
   const videoRef = useRef(null)
   const ended = useRef(false)
   const warningCount = useRef(0)
+  const faceWarningCount = useRef(0)
   const lowestIntegrity = useRef(100)
 
   // Re-computed on every render; the exam clock re-renders 4×/s, so the decay animates on its own.
@@ -169,6 +173,47 @@ export default function Exam({ stream, onFinish }) {
     }
   }, [stream])
 
+  // Rule: no face for a while, or a second person in view → warning; the last allowed warning is UFM.
+  useEffect(() => {
+    const video = videoRef.current
+    const rule = createFaceRule()
+    let detector = null
+    let id = null
+    let cancelled = false
+
+    loadFaceDetector().then((loaded) => {
+      if (cancelled) return loaded.close()
+      detector = loaded
+      id = setInterval(() => {
+        if (!video.videoWidth) return
+        const count = detector.detectForVideo(video, performance.now()).detections.length
+        setFaces(count)
+        const kind = rule(count, Date.now())
+        if (!kind) return
+
+        const n = ++faceWarningCount.current
+        setFaceWarnings(n)
+        window.proctor.log({ type: 'face-warning', kind, n })
+        if (n >= RULES.maxFaceWarnings) ufm(`Camera rule broken ${n} times (${kind})`)
+        else setBanner(`Warning ${n} of ${RULES.maxFaceWarnings}: ${kind} in camera. Stay alone and in view.`)
+      }, FACE_CHECK_MS)
+    }).catch((error) => {
+      setFaces(null)
+      window.proctor.log({ type: 'capture-error', source: 'face-detector', message: error.message })
+    })
+
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      detector?.close()
+    }
+  }, [])
+
+  // Autosave: answers.json in the session folder is rewritten on every change.
+  useEffect(() => {
+    window.proctor.saveAnswers(answers)
+  }, [answers])
+
   useEffect(() => {
     if (!banner) return
     const t = setTimeout(() => setBanner(''), 6000)
@@ -196,6 +241,11 @@ export default function Exam({ stream, onFinish }) {
           </span>
           <span className={`chip ${warnings ? 'chip-warn' : ''}`}>
             {calibrating ? 'Calibrating mic — stay quiet' : `Audio warnings ${warnings}/${RULES.maxAudioWarnings}`}
+          </span>
+          <span className={`chip ${faces === 1 ? '' : 'chip-warn'}`}>
+            {faces === undefined ? 'Starting face check'
+              : faces === null ? 'Face check unavailable'
+                : `${faces === 1 ? 'Face in view' : faces === 0 ? 'No face' : `${faces} faces`} · ${faceWarnings}/${RULES.maxFaceWarnings}`}
           </span>
           <span className={`timer ${seconds < 300 ? 'timer-low' : ''}`}>{clock(seconds)}</span>
           <video ref={videoRef} className="cam" autoPlay muted playsInline />

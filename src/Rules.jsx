@@ -37,7 +37,7 @@ export default function Rules({ onStart }) {
           <li>Only one display may be connected, and screen-sharing, messaging or AI apps must stay closed.</li>
           <li>Your camera and screen are captured every {RULES.snapshotEveryS} seconds and saved with a hash-chained event log.</li>
           <li>An integrity score tracks every flagged event and is included in your result.</li>
-          <li>Stay in front of the camera for the whole exam.</li>
+          <li>Stay alone and in front of the camera. No face for 5 seconds, or another person in view, gives a warning; the <strong>{ordinal(RULES.maxFaceWarnings)} warning</strong> is UFM.</li>
         </ol>
 
         <label className="agree">

@@ -116,6 +116,20 @@ h1 { font-size: 26px; }
 .facts dt { font-size: 13px; color: var(--muted); }
 .facts dd { margin: 2px 0 0; font-weight: 600; }
 .error { color: var(--danger); }
+.facts { grid-template-columns: repeat(3, 1fr); }
+
+.report { max-width: 720px; }
+.report-section { margin-bottom: 24px; }
+.report-section h3 { margin-bottom: 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.graph { display: block; width: 100%; height: 96px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.graph-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.graph-mid { stroke: var(--border-strong); stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.timeline { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.timeline li { display: flex; gap: 14px; padding: 8px 14px; font-size: 14px; }
+.timeline li + li { border-top: 1px solid var(--border); }
+.timeline time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.timeline .flagged span { color: var(--warn); font-weight: 500; }
+.path { overflow-wrap: anywhere; }
 
 /* Exam */
 .exam { height: 100vh; display: flex; flex-direction: column; user-select: none; }

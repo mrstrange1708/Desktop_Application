@@ -17,7 +17,9 @@ contextBridge.exposeInMainWorld("proctor", {
     saveCamera: (bytes) => ipcRenderer.invoke("save-camera", bytes),
     captureScreen: () => ipcRenderer.invoke("capture-screen"),
     log: (entry) => ipcRenderer.invoke("log", entry),
-    verifyLog: () => ipcRenderer.invoke("verify-log"),
+    saveAnswers: (answers) => ipcRenderer.invoke("save-answers", answers),
+    sessionReport: () => ipcRenderer.invoke("session-report"),
+    openSession: () => ipcRenderer.invoke("open-session"),
     onQuitAttempt: (callback) => subscribe("quit-attempt", callback),
     onEvent: (callback) => subscribe("proctor-event", callback)
 });

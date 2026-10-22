@@ -1,5 +1,5 @@
 // main.js — Electron main process
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, systemPreferences, screen, powerMonitor } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, systemPreferences, screen, powerMonitor, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { GENESIS, chainEntry, verifyChain, grayFromBitmap, dHash, hamming } from "./evidence.js";
@@ -10,6 +10,14 @@ const IDLE_LIMIT_S = 120;     // no keyboard/mouse input for this long gets logg
 // save every SCREEN_FORCE_SAVE_MS; switch to per-region hashes if that proves too coarse.
 const SCREEN_CHANGE_BITS = 4;          // dHash distance that counts as "screen changed"
 const SCREEN_FORCE_SAVE_MS = 60_000;   // save at least this often even when nothing changed
+
+// Dev-only switches for automated runs; ignored in the packaged app.
+const DEV_TEST = app.isPackaged ? {} : {
+    folder: process.env.PROCTOR_TEST_FOLDER, // skip the folder dialog
+    noLock: process.env.PROCTOR_NO_LOCK === "1", // no kiosk / always-on-top, so a test run can't lock the screen
+    hidden: process.env.PROCTOR_HIDDEN === "1", // never show the window (scripts/e2e.mjs)
+    skipAppCheck: process.env.PROCTOR_SKIP_APP_CHECK === "1" // don't make the tester quit their own apps
+};
 
 let mainWindow = null;
 let examActive = false;
@@ -23,6 +31,7 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 820,
+        show: !DEV_TEST.hidden,
         backgroundColor: "#f6f7f9",
         webPreferences: {
             preload: path.join(import.meta.dirname, "preload.cjs"),
@@ -67,6 +76,7 @@ function createWindow() {
 }
 
 function lockWindow(on) {
+    if (DEV_TEST.noLock) return;
     mainWindow.setKiosk(on); // fullscreen; on macOS also disables Cmd+Tab and hides the Dock
     mainWindow.setAlwaysOnTop(on, "screen-saver");
     mainWindow.setContentProtection(on); // window shows up black in screenshots / screen recordings
@@ -84,7 +94,7 @@ function writeLog(entry) {
 }
 
 async function systemCheck() {
-    return { displays: screen.getAllDisplays().length, restricted: await runningRestrictedApps() };
+    return { displays: screen.getAllDisplays().length, restricted: DEV_TEST.skipAppCheck ? [] : await runningRestrictedApps() };
 }
 
 // Logs once when the student goes idle, re-arms once they are active again.
@@ -98,6 +108,7 @@ function watchIdle() {
 }
 
 ipcMain.handle("pick-folder", async () => {
+    if (DEV_TEST.folder) return (chosenFolder = DEV_TEST.folder);
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
         title: "Choose where exam captures are saved",
         properties: ["openDirectory", "createDirectory"]
@@ -179,10 +190,24 @@ ipcMain.handle("log", (_event, entry) => {
     writeLog(entry);
 });
 
-ipcMain.handle("verify-log", () => {
-    if (!sessionDir) return null;
-    return verifyChain(fs.readFileSync(path.join(sessionDir, "events.jsonl"), "utf8"));
+ipcMain.handle("save-answers", (_event, answers) => {
+    if (!sessionDir || !examActive || typeof answers !== "object" || answers === null) return;
+    const json = JSON.stringify({ savedAt: new Date().toISOString(), answers }, null, 2);
+    if (json.length > 100_000) return;
+    return fs.promises.writeFile(path.join(sessionDir, "answers.json"), json);
 });
+
+// Everything the result screen needs: chain check + the events themselves for the timeline.
+ipcMain.handle("session-report", () => {
+    if (!sessionDir) return null;
+    const text = fs.readFileSync(path.join(sessionDir, "events.jsonl"), "utf8");
+    const events = text.split("\n").filter(Boolean).flatMap((line) => {
+        try { return [JSON.parse(line)]; } catch { return []; }
+    });
+    return { chain: verifyChain(text), events };
+});
+
+ipcMain.handle("open-session", () => sessionDir && shell.openPath(sessionDir));
 
 app.whenReady().then(() => {
     screen.on("display-added", () => examActive && writeLog({ type: "display-added" }));
