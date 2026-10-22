@@ -4,11 +4,16 @@ import { createFaceRule } from './face.js'
 
 const run = (rule, frames) => frames.map(([faces, t]) => rule(faces, t)).filter(Boolean)
 
-test('no face fires once after the limit, not before', () => {
+test('no face fires after the limit, not before', () => {
   const rule = createFaceRule({ missingMs: 5000 })
   assert.deepEqual(run(rule, [[1, 0], [0, 1000], [0, 5500], [0, 5999]]), [])
   assert.deepEqual(run(rule, [[0, 6000], [0, 7000]]), ['no face'])
-  assert.deepEqual(run(rule, [[0, 20000]]), []) // same episode, no repeat
+})
+
+test('a long absence repeats the warning every limit, so it can reach UFM', () => {
+  const rule = createFaceRule({ missingMs: 5000 })
+  const away = Array.from({ length: 31 }, (_, i) => [0, i * 500]) // 15 s without a face
+  assert.deepEqual(run(rule, away), ['no face', 'no face', 'no face'])
 })
 
 test('a face back for clearMs ends the episode and re-arms the rule', () => {
@@ -24,8 +29,13 @@ test('flickering detections do not reset the timer', () => {
 
 test('alternating no-face / two-faces is one episode, not a reset each time', () => {
   const rule = createFaceRule({ missingMs: 5000, multipleMs: 2000 })
-  const helper = Array.from({ length: 10 }, (_, i) => [i % 2 ? 2 : 0, i * 500]) // 0,2,0,2… every 500 ms
+  const helper = Array.from({ length: 8 }, (_, i) => [i % 2 ? 2 : 0, i * 500]) // 0,2,0,2… every 500 ms
   assert.deepEqual(run(rule, helper), ['multiple faces'])
+})
+
+test('multiple faces and no face are judged independently', () => {
+  const rule = createFaceRule({ missingMs: 5000, multipleMs: 2000 })
+  assert.deepEqual(run(rule, [[2, 0], [2, 2000], [0, 3000], [0, 5000]]), ['multiple faces', 'no face'])
 })
 
 test('multiple faces use their own, shorter limit', () => {

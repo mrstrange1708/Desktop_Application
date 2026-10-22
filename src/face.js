@@ -18,33 +18,32 @@ export async function loadFaceDetector() {
 
 // One "bad episode" = any run of frames without exactly one face. It only ends after clearMs of
 // good frames, so neither detector flicker nor switching between 0 and 2+ faces resets it.
-// Fires "multiple faces" once 2+ faces were first seen multipleMs ago, "no face" once the episode
-// is missingMs old; each at most once per episode.
+// "no face" fires missingMs into the episode, "multiple faces" multipleMs after 2+ faces were
+// first seen — judged independently, and repeated every limit while the episode lasts, so
+// staying out of view keeps adding warnings (and reaches UFM) instead of warning once.
 // ponytail: limits are fixed; look-aways shorter than missingMs are ignored on purpose
 export function createFaceRule({ missingMs = 5000, multipleMs = 2000, clearMs = 1500 } = {}) {
-  let start = null // episode start, null = all good
-  let multipleSince = null
+  const kinds = ['multiple faces', 'no face']
+  let inEpisode = false
   let lastBad = 0
-  let fired = new Set()
+  let due = {} // kind → time its next warning is due
   return (faces, now) => {
     if (faces !== 1) {
-      if (start === null) {
-        start = now
-        multipleSince = null
-        fired = new Set()
+      if (!inEpisode) {
+        inEpisode = true
+        due = { 'no face': now + missingMs, 'multiple faces': Infinity }
       }
-      if (faces > 1) multipleSince ??= now
+      if (faces > 1 && due['multiple faces'] === Infinity) due['multiple faces'] = now + multipleMs
       lastBad = now
-    } else if (start !== null && now - lastBad >= clearMs) {
-      start = null
+    } else if (inEpisode && now - lastBad >= clearMs) {
+      inEpisode = false
     }
-    if (start === null) return null
+    if (!inEpisode) return null
 
-    const kind = multipleSince !== null && now - multipleSince >= multipleMs ? 'multiple faces'
-      : now - start >= missingMs ? 'no face'
-        : null
-    if (!kind || fired.has(kind)) return null
-    fired.add(kind)
+    const kind = kinds.find((k) => now >= due[k])
+    if (!kind) return null
+    // "no face" repeats on its own; "multiple faces" re-arms only when 2+ faces show up again.
+    due[kind] = kind === 'no face' ? now + missingMs : Infinity
     return kind
   }
 }
