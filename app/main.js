@@ -153,18 +153,29 @@ handle("screen-access", async () => {
 
 handle("system-check", systemCheck);
 
-handle("exam:start", async () => {
-    if (!chosenFolder) throw new Error("No evidence folder chosen");
+// Validated here too — the details form is a convenience, main is the authority.
+function validCandidate(candidate) {
+    const name = typeof candidate?.name === "string" ? candidate.name.trim().replace(/\s+/g, " ") : "";
+    const enrollment = typeof candidate?.enrollment === "string" ? candidate.enrollment : "";
+    if (name.length < 2 || name.length > 80) throw new Error("Enter your full name");
+    if (!/^[A-Z0-9/-]{3,24}$/.test(enrollment)) throw new Error("Enter a valid enrollment number");
+    return { name, enrollment };
+}
+
+handle("exam:start", async (_event, details) => {
+    const candidate = validCandidate(details);
+    if (!chosenFolder) throw new Error("Choose a session folder first");
     // Re-check here: main is the authority, the setup screen is only a convenience.
     const { displays, restricted } = await systemCheck();
     if (displays > 1) throw new Error("Disconnect extra displays before starting");
     if (restricted.length) throw new Error(`Close these apps before starting: ${restricted.join(", ")}`);
 
-    sessionDir = path.join(chosenFolder, `exam-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    sessionDir = path.join(chosenFolder, `exam-${candidate.enrollment.replace(/\//g, "-")}-${stamp}`);
     fs.mkdirSync(sessionDir, { recursive: true });
     lastHash = GENESIS;
     lastScreenSave.clear();
-    writeLog({ type: "exam-start" });
+    writeLog({ type: "exam-start", candidate });
     examActive = true;
     lockWindow(true);
     idleTimer = watchIdle();

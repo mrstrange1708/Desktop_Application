@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { integrityScore } from './integrity.js'
 
 const LABELS = {
-  'exam-start': 'Exam started',
+  'exam-start': (e) => e.candidate ? `Exam started by ${e.candidate.name}` : 'Exam started',
   'focus-lost': 'Left the exam window',
   'focus-back': 'Returned to the exam window',
   'quit-attempt': 'Tried to quit',
@@ -38,7 +38,7 @@ function IntegrityGraph({ events, start, end }) {
   )
 }
 
-export default function Result({ status, reason, score, total, lowestIntegrity, sessionDir }) {
+export default function Result({ status, reason, score, total, lowestIntegrity, candidate, sessionDir }) {
   const ufm = status === 'ufm'
   const [report, setReport] = useState(null) // { chain: { ok, entries, brokenAt? }, events }
 
@@ -54,63 +54,63 @@ export default function Result({ status, reason, score, total, lowestIntegrity, 
   const chain = report?.chain
 
   return (
-    <div className="screen">
-      <div className={`card report ${ufm ? 'result-ufm' : ''}`}>
-        <div className="result">
-          <p className="eyebrow">{ufm ? 'Unfair means' : 'Exam submitted'}</p>
-          <h1>{ufm ? 'You have been marked UFM' : 'Your exam has been submitted'}</h1>
-          <p className="lede">
-            {ufm ? `Your exam has been rejected. Reason: ${reason}.` : `${reason ? `${reason}. ` : ''}Your answers have been recorded.`}
-          </p>
-          <p className="score">{score}<span> / {total}</span></p>
+    <>
+      <div className={`verdict ${ufm ? 'verdict-ufm' : ''}`}>
+        <div>
+          <h1>{ufm ? 'Marked UFM, exam rejected' : 'Exam submitted'}</h1>
+          <p className="candidate">{candidate.name}, {candidate.enrollment}</p>
         </div>
-
-        <dl className="facts">
-          <div>
-            <dt>Lowest integrity</dt>
-            <dd>{lowestIntegrity}%</dd>
-          </div>
-          <div>
-            <dt>Flagged events</dt>
-            <dd>{timeline.filter((e) => FLAGGED.has(e.type)).length}</dd>
-          </div>
-          <div>
-            <dt>Event log</dt>
-            <dd className={chain && !chain.ok ? 'error' : ''}>
-              {!chain ? 'Checking…' : chain.ok ? `Chain intact · ${chain.entries}` : `Broken at entry ${chain.brokenAt}`}
-            </dd>
-          </div>
-        </dl>
-
-        {start !== undefined && end > start && (
-          <section className="report-section">
-            <h3>Integrity over the exam</h3>
-            <IntegrityGraph events={events} start={start} end={end} />
-          </section>
-        )}
-
-        <section className="report-section">
-          <h3>Timeline</h3>
-          <ol className="timeline">
-            {timeline.map((e) => {
-              const label = LABELS[e.type]
-              return (
-                <li key={e.hash} className={FLAGGED.has(e.type) ? 'flagged' : ''}>
-                  <time>{offset(e.at - start)}</time>
-                  <span>{typeof label === 'function' ? label(e) : label}</span>
-                </li>
-              )
-            })}
-          </ol>
-          {skipped > 0 && <p className="muted small">{skipped} unchanged screenshots skipped (logged).</p>}
-        </section>
-
-        <p className="muted small path">Session record: {sessionDir}</p>
-        <div className="card-actions">
-          <button className="btn" onClick={() => window.proctor.openSession()}>Open session folder</button>
-          <button className="btn btn-primary" onClick={() => window.close()}>Close</button>
-        </div>
+        <p className="score" aria-label={`Score ${score} out of ${total}`}>{score}<span>/{total}</span></p>
       </div>
-    </div>
+      <p className="lede">
+        {ufm ? `Reason: ${reason}. Your score has been set to 0.` : `${reason ? `${reason}. ` : ''}Your answers have been recorded.`}
+      </p>
+
+      <dl className="facts">
+        <div>
+          <dt>Lowest integrity</dt>
+          <dd>{lowestIntegrity}</dd>
+        </div>
+        <div>
+          <dt>Flagged events</dt>
+          <dd>{timeline.filter((e) => FLAGGED.has(e.type)).length}</dd>
+        </div>
+        <div>
+          <dt>Event log</dt>
+          <dd className={chain && !chain.ok ? 'error' : ''}>
+            {!chain ? 'Checking…' : chain.ok ? `Intact, ${chain.entries} entries` : `Broken at entry ${chain.brokenAt}`}
+          </dd>
+        </div>
+      </dl>
+
+      {start !== undefined && end > start && (
+        <section className="report-section">
+          <h3>Integrity during the exam</h3>
+          <IntegrityGraph events={events} start={start} end={end} />
+        </section>
+      )}
+
+      <section className="report-section">
+        <h3>What happened</h3>
+        <ol className="timeline">
+          {timeline.map((e) => {
+            const label = LABELS[e.type]
+            return (
+              <li key={e.hash} className={FLAGGED.has(e.type) ? 'flagged' : ''}>
+                <time>{offset(e.at - start)}</time>
+                <span>{typeof label === 'function' ? label(e) : label}</span>
+              </li>
+            )
+          })}
+        </ol>
+        {skipped > 0 && <p className="muted small">{skipped} unchanged screenshots were skipped and logged.</p>}
+      </section>
+
+      <p className="muted small path">Saved to {sessionDir}</p>
+      <div className="actions">
+        <button className="btn" onClick={() => window.proctor.openSession()}>Open session folder</button>
+        <button className="btn btn-primary" onClick={() => window.close()}>Close</button>
+      </div>
+    </>
   )
 }

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 
 const PORT = 9333
 const DIST = process.argv.includes('--dist')
+const SHOTS = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : null // dir for screenshots
 const PAGE_URL = DIST ? 'app://bundle/' : 'http://localhost:5173'
 const EXAM_SECONDS = 25
 const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'proctor-e2e-'))
@@ -51,6 +52,15 @@ async function evaluate(expression) {
   return msg.result?.result?.value
 }
 const text = () => evaluate('document.body.innerText')
+async function shot(name) {
+  if (!SHOTS) return
+  await sleep(400)
+  const id = nextId++
+  ws.send(JSON.stringify({ id, method: 'Page.captureScreenshot', params: { format: 'png' } }))
+  const msg = await new Promise((r) => pending.set(id, r))
+  fs.mkdirSync(SHOTS, { recursive: true })
+  fs.writeFileSync(path.join(SHOTS, `${name}.png`), Buffer.from(msg.result.data, 'base64'))
+}
 async function click(label) {
   for (let i = 0; i < 40; i++) {
     const ok = await evaluate(`(() => {
@@ -66,19 +76,44 @@ async function click(label) {
   throw new Error(`no enabled "${label}"\n--- page ---\n${await text()}`)
 }
 
+// Types into a labelled field the way React expects (native setter + input event).
+async function fill(label, value) {
+  const ok = await evaluate(`(() => {
+    const field = [...document.querySelectorAll('label.field')].find((l) => l.querySelector('.field-label')?.innerText === ${JSON.stringify(label)})
+    const input = field?.querySelector('input')
+    if (!input) return false
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(value)})
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    return true
+  })()`)
+  if (!ok) throw new Error(`no field "${label}"\n--- page ---\n${await text()}`)
+}
+
 try {
+  await shot('1-details')
+  await click('Continue to system check') // empty form → validation messages, stays on the page
+  assert.match(await text(), /Enter your full name/)
+  await shot('1-details-errors')
+  await fill('Full name', 'Test Student')
+  await fill('Enrollment number', 'e2e/2026-01')
+  await click('Continue to system check')
   await click('Choose folder')
   await click('Allow access')
   await click('Run check')
+  await shot('2-setup')
   await click('Continue to rules')
-  await click('I have read the rules')
+  await shot('3-rules')
+  await click('I, Test Student (E2E/2026-01), have read')
   await click('Start exam')
   await click('B') // answer question 1 (option B)
+  await shot('4-exam')
   await sleep(EXAM_SECONDS * 1000)
+  await shot('5-exam-later')
   const bar = await evaluate(`document.querySelector('.exam-bar').innerText`)
   await click('Submit exam')
   await click('Submit')
   await sleep(1500)
+  await shot('6-result')
   const result = await text()
 
   const session = fs.readdirSync(folder).map((d) => path.join(folder, d))[0]
@@ -92,7 +127,10 @@ try {
   assert.ok(files.some((f) => f.startsWith('camera-')), 'camera frames saved')
   assert.ok(files.some((f) => f.startsWith('screen-')), 'screenshots saved')
   assert.ok(files.includes('answers.json'), 'answers autosaved')
-  assert.match(result, /Chain intact/)
+  assert.match(result, /Intact, \d+ entries/)
+  assert.match(result, /Test Student, E2E\/2026-01/)
+  assert.match(path.basename(session), /^exam-E2E-2026-01-/)
+  assert.deepEqual(events[0].candidate, { name: 'Test Student', enrollment: 'E2E/2026-01' })
   assert.ok(!events.some((e) => e.type === 'capture-error'), 'no capture errors')
   console.log('\nE2E PASS')
 } catch (error) {

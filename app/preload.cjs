@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld("proctor", {
     pickFolder: () => ipcRenderer.invoke("pick-folder"),
     screenAccess: () => ipcRenderer.invoke("screen-access"),
     systemCheck: () => ipcRenderer.invoke("system-check"),
-    startExam: () => ipcRenderer.invoke("exam:start"),
+    startExam: (candidate) => ipcRenderer.invoke("exam:start", candidate),
     endExam: () => ipcRenderer.invoke("exam:end"),
     saveCamera: (bytes) => ipcRenderer.invoke("save-camera", bytes),
     captureScreen: () => ipcRenderer.invoke("capture-screen"),

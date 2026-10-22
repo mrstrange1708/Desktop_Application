@@ -29,6 +29,7 @@ macOS asks for camera, microphone and Screen Recording permission on first use.
 npm test           # unit tests: audio, face rule, integrity, hash chain, dHash, app scan
 npm run e2e        # whole flow in a hidden window, fake camera/mic (needs `npm run dev`)
 npm run e2e:dist   # same, against the production build over app:// with the CSP
+node scripts/e2e.mjs --shots <dir>   # also saves a screenshot of every screen
 ```
 
 ## Structure
@@ -38,7 +39,8 @@ app/main.js       Electron main process (window lock, checks, evidence, IPC hand
 app/preload.cjs   contextBridge — the only API the renderer can call (window.proctor)
 app/evidence.js   hash-chained log + dHash screen diff
 app/processes.js  restricted-app scan
-src/              React renderer: Setup → Rules → Exam → Result
+src/              React renderer: Details → Setup → Rules → Exam → Result (Shell = brand bar + steps)
+src/assets/logo.svg  the logo; `npm run icon` renders build/icon.png + build/icon.icns from it
 src/exam.js       questions + rule timings (your knobs)
 src/audio.js      background-audio detectors
 src/face.js       MediaPipe face check + no-face / multiple-faces rule

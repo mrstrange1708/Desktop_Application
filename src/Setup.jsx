@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 
+// One row: a bubble that fills in when the check passes, what it is, and the action.
 function Check({ done, title, detail, error, children }) {
   return (
     <li className="check">
-      <span className={`check-dot ${done ? 'done' : ''}`}>{done && '✓'}</span>
-      <div className="check-body">
+      <span className={`bubble ${done ? 'is-filled is-ok' : ''}`} aria-hidden="true">{done && '✓'}</span>
+      <div className="check-text">
         <h3>{title}</h3>
         <p className={error ? 'error' : ''}>{error || detail}</p>
-        {children}
       </div>
+      <div className="check-action">{children}</div>
     </li>
   )
 }
 
-export default function Setup({ onReady }) {
+export default function Setup({ onReady, onBack }) {
   const [folder, setFolder] = useState(null)
   const [stream, setStream] = useState(null)
   const [mediaError, setMediaError] = useState('')
@@ -30,7 +31,7 @@ export default function Setup({ onReady }) {
       setStream(await navigator.mediaDevices.getUserMedia({ video: true, audio: true }))
       setMediaError('')
     } catch {
-      setMediaError('Camera or microphone was blocked. Allow access in System Settings → Privacy & Security, then try again.')
+      setMediaError('Camera or microphone is blocked. Allow access in System Settings → Privacy & Security, then try again.')
     }
   }
 
@@ -42,64 +43,62 @@ export default function Setup({ onReady }) {
   const systemOk = system !== null && !systemIssues
 
   return (
-    <div className="screen">
-      <div className="card">
-        <p className="eyebrow">Step 1 of 2</p>
-        <h1>Set up your exam</h1>
-        <p className="lede">Complete these checks before you read the rules. Required checks are needed to continue.</p>
+    <>
+      <h1>Check your setup</h1>
+      <p className="lede">Everything here stays on this computer. The first, second and last checks are required.</p>
 
-        <ol className="checks">
-          <Check done={!!folder} title="Evidence folder" detail={folder || 'Camera photos, screenshots and the event log are saved here.'}>
-            <button className="btn" onClick={async () => setFolder(await window.proctor.pickFolder())}>
-              {folder ? 'Change folder' : 'Choose folder'}
-            </button>
-          </Check>
-
-          <Check
-            done={!!stream}
-            title="Camera and microphone"
-            detail={stream ? `Connected${mic ? ` · ${mic}` : ''}` : 'Used to verify it is you and to detect background noise.'}
-            error={mediaError}
-          >
-            {stream
-              ? <video ref={videoRef} className="preview" autoPlay muted playsInline />
-              : <button className="btn" onClick={allowMedia}>Allow access</button>}
-          </Check>
-
-          <Check
-            done={screen === 'granted'}
-            title="Screen capture (recommended)"
-            detail={
-              screen === null ? 'Lets the proctor record what is on your screen.'
-                : screen === 'granted' ? 'Allowed'
-                  : 'Not allowed. Enable it in System Settings → Privacy & Security → Screen Recording, then restart the app.'
-            }
-          >
-            {screen !== 'granted' && (
-              <button className="btn" onClick={async () => setScreen(await window.proctor.screenAccess())}>Check access</button>
-            )}
-          </Check>
-
-          <Check
-            done={systemOk}
-            title="System check"
-            detail={system === null ? 'Only one display, and no screen-sharing, messaging or AI apps running.' : systemOk ? 'One display, no restricted apps' : ''}
-            error={systemIssues}
-          >
-            {!systemOk && (
-              <button className="btn" onClick={async () => setSystem(await window.proctor.systemCheck())}>
-                {system ? 'Check again' : 'Run check'}
-              </button>
-            )}
-          </Check>
-        </ol>
-
-        <div className="card-actions">
-          <button className="btn btn-primary" disabled={!folder || !stream || !systemOk} onClick={() => onReady(stream)}>
-            Continue to rules
+      <ol className="checks">
+        <Check done={!!folder} title="Session folder" detail={folder || 'Camera photos, screenshots, your answers and the event log are saved here.'}>
+          <button className="btn" onClick={async () => setFolder(await window.proctor.pickFolder())}>
+            {folder ? 'Change folder' : 'Choose folder'}
           </button>
-        </div>
+        </Check>
+
+        <Check
+          done={!!stream}
+          title="Camera and microphone"
+          detail={stream ? `Connected${mic ? `: ${mic}` : ''}` : 'Used to see that you are present and alone, and to hear background noise.'}
+          error={mediaError}
+        >
+          {stream
+            ? <video ref={videoRef} className="preview" autoPlay muted playsInline />
+            : <button className="btn" onClick={allowMedia}>Allow access</button>}
+        </Check>
+
+        <Check
+          done={screen === 'granted'}
+          title="Screen capture (recommended)"
+          detail={
+            screen === null ? 'Lets the proctor record what is on your screen.'
+              : screen === 'granted' ? 'Allowed'
+                : 'Not allowed. Turn it on in System Settings → Privacy & Security → Screen Recording, then restart the app.'
+          }
+        >
+          {screen !== 'granted' && (
+            <button className="btn" onClick={async () => setScreen(await window.proctor.screenAccess())}>Check access</button>
+          )}
+        </Check>
+
+        <Check
+          done={systemOk}
+          title="Displays and apps"
+          detail={system === null ? 'One display only, and no screen-sharing, messaging or AI apps open.' : systemOk ? 'One display, no restricted apps open' : ''}
+          error={systemIssues}
+        >
+          {!systemOk && (
+            <button className="btn" onClick={async () => setSystem(await window.proctor.systemCheck())}>
+              {system ? 'Check again' : 'Run check'}
+            </button>
+          )}
+        </Check>
+      </ol>
+
+      <div className="actions">
+        <button className="btn btn-quiet" onClick={() => { stream?.getTracks().forEach((t) => t.stop()); onBack() }}>Back</button>
+        <button className="btn btn-primary" disabled={!folder || !stream || !systemOk} onClick={() => onReady(stream)}>
+          Continue to rules
+        </button>
       </div>
-    </div>
+    </>
   )
 }

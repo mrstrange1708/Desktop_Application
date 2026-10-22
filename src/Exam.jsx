@@ -3,6 +3,7 @@ import { EXAM, RULES } from './exam.js'
 import { CALIBRATION_FRAMES, FRAME_MS, analyzeFrame, calibrate, createSustainGate, rmsDb } from './audio.js'
 import { integrityScore } from './integrity.js'
 import { FACE_CHECK_MS, createFaceRule, loadFaceDetector } from './face.js'
+import logo from './assets/logo.svg'
 
 // Wall-clock countdown. start(seconds) begins it, start(null) cancels it; onExpire runs once at 0.
 function useCountdown(onExpire) {
@@ -46,7 +47,7 @@ async function captureEvidence(video) {
 
 const clock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-export default function Exam({ stream, onFinish }) {
+export default function Exam({ candidate, stream, onFinish }) {
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState({})
   const [warnings, setWarnings] = useState(0)
@@ -228,84 +229,86 @@ export default function Exam({ stream, onFinish }) {
   return (
     <div className="exam">
       <header className="exam-bar">
-        <div>
-          <span className="exam-title">{EXAM.title}</span>
-          <span className="muted"> · {answered} of {total} answered</span>
+        <div className="exam-who">
+          <img src={logo} alt="" width="34" height="34" />
+          <div>
+            <strong>{EXAM.title}</strong>
+            <span>{candidate.name}, {candidate.enrollment}</span>
+          </div>
         </div>
-        <div className="bar-right">
-          <span
-            className={`chip ${integrity >= 80 ? 'chip-ok' : integrity >= 50 ? 'chip-warn' : 'chip-danger'}`}
-            title="Drops with every flagged event and recovers over time"
-          >
-            Integrity {integrity}%
-          </span>
-          <span className={`chip ${warnings ? 'chip-warn' : ''}`}>
-            {calibrating ? 'Calibrating mic — stay quiet' : `Audio warnings ${warnings}/${RULES.maxAudioWarnings}`}
-          </span>
-          <span className={`chip ${faces === 1 ? '' : 'chip-warn'}`}>
-            {faces === undefined ? 'Starting face check'
-              : faces === null ? 'Face check unavailable'
-                : `${faces === 1 ? 'Face in view' : faces === 0 ? 'No face' : `${faces} faces`} · ${faceWarnings}/${RULES.maxFaceWarnings}`}
-          </span>
-          <span className={`timer ${seconds < 300 ? 'timer-low' : ''}`}>{clock(seconds)}</span>
-          <video ref={videoRef} className="cam" autoPlay muted playsInline />
-        </div>
+        <ul className="monitor" aria-label="Monitoring">
+          <li className={faces === undefined ? 'is-pending' : faces === 1 ? '' : faces > 1 ? 'is-alert' : 'is-warn'}>
+            {faces === undefined ? 'Camera starting'
+              : faces === null ? 'Face check off'
+                : faces === 1 ? 'Camera' : faces === 0 ? 'No face' : `${faces} faces`}
+            {faceWarnings > 0 && ` ${faceWarnings}/${RULES.maxFaceWarnings}`}
+          </li>
+          <li className={calibrating ? 'is-pending' : warnings ? 'is-warn' : ''}>
+            {calibrating ? 'Microphone: stay quiet' : 'Microphone'}
+            {warnings > 0 && ` ${warnings}/${RULES.maxAudioWarnings}`}
+          </li>
+          <li className={integrity >= 80 ? '' : integrity >= 50 ? 'is-warn' : 'is-alert'} title="Drops with every flagged event and recovers over time">
+            Integrity {integrity}
+          </li>
+        </ul>
+        <span className={`timer ${seconds < 300 ? 'timer-low' : ''}`} aria-label="Time left">{clock(seconds)}</span>
+        <video ref={videoRef} className="cam" autoPlay muted playsInline />
       </header>
-
-      {banner && <div className="banner" role="alert">{banner}</div>}
 
       <div className="exam-body">
         <main className="question">
+          {banner && <p className="notice" role="alert">{banner}</p>}
           <p className="q-num">Question {index + 1} of {total}</p>
           <h2>{question.text}</h2>
           <div className="options" role="radiogroup">
-            {question.options.map((option, k) => (
-              <label key={k} className={`option ${answers[question.id] === k ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name={question.id}
-                  checked={answers[question.id] === k}
-                  onChange={() => setAnswers({ ...answers, [question.id]: k })}
-                />
-                <span className="option-key">{'ABCDEFGH'[k]}</span>
-                {option}
-              </label>
-            ))}
+            {question.options.map((option, k) => {
+              const chosen = answers[question.id] === k
+              return (
+                <label key={k} className={`option ${chosen ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name={question.id}
+                    checked={chosen}
+                    onChange={() => setAnswers({ ...answers, [question.id]: k })}
+                  />
+                  <span className={`bubble ${chosen ? 'is-filled' : ''}`}>{'ABCDEFGH'[k]}</span>
+                  {option}
+                </label>
+              )
+            })}
           </div>
           <div className="q-actions">
             <button className="btn" disabled={index === 0} onClick={() => setIndex(index - 1)}>Previous</button>
             <button
-              className="btn"
+              className="btn btn-quiet"
               disabled={answers[question.id] === undefined}
               onClick={() => setAnswers(({ [question.id]: _, ...rest }) => rest)}
             >
-              Clear response
+              Clear answer
             </button>
             {index < total - 1
-              ? <button className="btn btn-primary" onClick={() => setIndex(index + 1)}>Save &amp; next</button>
+              ? <button className="btn btn-primary" onClick={() => setIndex(index + 1)}>Next question</button>
               : <button className="btn btn-primary" onClick={() => setConfirming(true)}>Submit exam</button>}
           </div>
         </main>
 
-        <aside className="palette">
-          <h3>Questions</h3>
-          <div className="palette-grid">
+        <aside className="answer-sheet" aria-label="Answer sheet">
+          <h3>Answer sheet</h3>
+          <div className="answer-grid">
             {EXAM.questions.map((q, k) => (
               <button
                 key={q.id}
                 className={`${answers[q.id] !== undefined ? 'answered' : ''} ${k === index ? 'current' : ''}`}
                 onClick={() => setIndex(k)}
-                aria-label={`Question ${k + 1}`}
+                aria-label={`Question ${k + 1}${answers[q.id] !== undefined ? ', answered' : ''}`}
+                aria-current={k === index ? 'true' : undefined}
               >
                 {k + 1}
               </button>
             ))}
           </div>
-          <div className="legend">
-            <span><i className="answered" />Answered</span>
-            <span><i />Not answered</span>
-          </div>
-          <button className="btn btn-primary btn-block" onClick={() => setConfirming(true)}>Submit exam</button>
+          <p>{answered} of {total} answered. Filled bubbles are answered.</p>
+          <button className="btn btn-primary" onClick={() => setConfirming(true)}>Submit exam</button>
         </aside>
       </div>
 
