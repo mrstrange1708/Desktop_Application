@@ -1,7 +1,8 @@
 // main.js — Electron main process
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, systemPreferences, screen, powerMonitor, shell } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, systemPreferences, screen, powerMonitor, shell, protocol, net, session } from "electron";
 import path from "path";
 import fs from "fs";
+import { pathToFileURL } from "url";
 import { GENESIS, chainEntry, verifyChain, grayFromBitmap, dHash, hamming } from "./evidence.js";
 import { runningRestrictedApps } from "./processes.js";
 
@@ -16,8 +17,20 @@ const DEV_TEST = app.isPackaged ? {} : {
     folder: process.env.PROCTOR_TEST_FOLDER, // skip the folder dialog
     noLock: process.env.PROCTOR_NO_LOCK === "1", // no kiosk / always-on-top, so a test run can't lock the screen
     hidden: process.env.PROCTOR_HIDDEN === "1", // never show the window (scripts/e2e.mjs)
-    skipAppCheck: process.env.PROCTOR_SKIP_APP_CHECK === "1" // don't make the tester quit their own apps
+    skipAppCheck: process.env.PROCTOR_SKIP_APP_CHECK === "1", // don't make the tester quit their own apps
+    useDist: process.env.PROCTOR_USE_DIST === "1" // load the production build through app:// like the packaged app
 };
+
+// Production build is served from app://bundle/ (a private, sandboxed origin) instead of file://.
+const useDist = app.isPackaged || DEV_TEST.useDist;
+const DIST_DIR = path.join(import.meta.dirname, "../dist");
+const APP_ORIGIN = useDist ? "app://bundle" : "http://localhost:5173";
+protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+
+// A packaged exam app must not be steerable through a debugger.
+if (app.isPackaged && ["remote-debugging-port", "remote-debugging-pipe", "inspect", "inspect-brk"].some((s) => app.commandLine.hasSwitch(s))) {
+    app.exit(1);
+}
 
 let mainWindow = null;
 let examActive = false;
@@ -43,16 +56,18 @@ function createWindow() {
         }
     });
 
-    if (app.isPackaged) {
-        mainWindow.loadFile(path.join(import.meta.dirname, "../dist/index.html"));
-    } else {
-        mainWindow.loadURL("http://localhost:5173");
-        mainWindow.webContents.openDevTools();
+    mainWindow.loadURL(`${APP_ORIGIN}/${useDist ? "index.html" : ""}`);
+    if (!app.isPackaged) {
+        if (!DEV_TEST.hidden) mainWindow.webContents.openDevTools();
         // Devtools closes during the exam, so mirror renderer warnings/errors to the terminal.
         mainWindow.webContents.on("console-message", (event) => {
             if (event.level === "warning" || event.level === "error") console.log(`[renderer ${event.level}] ${event.message}`);
         });
     }
+
+    // The exam window only ever shows our own page: no navigation, no pop-ups.
+    mainWindow.webContents.on("will-navigate", (event) => event.preventDefault());
+    mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
     // During the exam swallow every Cmd/Ctrl shortcut (copy, paste, reload, devtools, hide, minimize…)
     // and F-keys. Cmd+Q is let through on purpose so it reaches the quit-attempt flow below.
@@ -107,7 +122,19 @@ function watchIdle() {
     }, 5000);
 }
 
-ipcMain.handle("pick-folder", async () => {
+// Every IPC handler only answers our own page; anything else (an injected frame, a stray
+// webview) is refused before the handler runs.
+// (Prefix match: Node's URL reports custom-scheme origins like app:// as "null".)
+const isOurs = (url) => typeof url === "string" && (url === APP_ORIGIN || url.startsWith(APP_ORIGIN + "/"));
+
+function handle(channel, handler) {
+    ipcMain.handle(channel, (event, ...args) => {
+        if (!isOurs(event.senderFrame?.url)) throw new Error("Blocked IPC from untrusted frame");
+        return handler(event, ...args);
+    });
+}
+
+handle("pick-folder", async () => {
     if (DEV_TEST.folder) return (chosenFolder = DEV_TEST.folder);
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
         title: "Choose where exam captures are saved",
@@ -117,16 +144,16 @@ ipcMain.handle("pick-folder", async () => {
     return chosenFolder;
 });
 
-ipcMain.handle("screen-access", async () => {
+handle("screen-access", async () => {
     if (process.platform !== "darwin") return "granted";
     // The first getSources call is what makes macOS show the Screen Recording prompt.
     await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } });
     return systemPreferences.getMediaAccessStatus("screen");
 });
 
-ipcMain.handle("system-check", systemCheck);
+handle("system-check", systemCheck);
 
-ipcMain.handle("exam:start", async () => {
+handle("exam:start", async () => {
     if (!chosenFolder) throw new Error("No evidence folder chosen");
     // Re-check here: main is the authority, the setup screen is only a convenience.
     const { displays, restricted } = await systemCheck();
@@ -144,21 +171,21 @@ ipcMain.handle("exam:start", async () => {
     return sessionDir;
 });
 
-ipcMain.handle("exam:end", () => {
+handle("exam:end", () => {
     writeLog({ type: "exam-end" });
     examActive = false;
     clearInterval(idleTimer);
     lockWindow(false);
 });
 
-ipcMain.handle("save-camera", (_event, bytes) => {
+handle("save-camera", (_event, bytes) => {
     if (!sessionDir || !(bytes instanceof Uint8Array) || bytes.length > 5_000_000) return;
     return fs.promises.writeFile(path.join(sessionDir, `camera-${Date.now()}.jpg`), bytes);
 });
 
 // Screenshots every display; saves when the content changed or the last save is older than
 // SCREEN_FORCE_SAVE_MS. Skipped captures are logged with their distance so gaps are auditable.
-ipcMain.handle("capture-screen", async () => {
+handle("capture-screen", async () => {
     if (!sessionDir) return;
     try {
         await captureScreens();
@@ -185,12 +212,12 @@ async function captureScreens() {
     }));
 }
 
-ipcMain.handle("log", (_event, entry) => {
+handle("log", (_event, entry) => {
     if (typeof entry?.type !== "string") return;
     writeLog(entry);
 });
 
-ipcMain.handle("save-answers", (_event, answers) => {
+handle("save-answers", (_event, answers) => {
     if (!sessionDir || !examActive || typeof answers !== "object" || answers === null) return;
     const json = JSON.stringify({ savedAt: new Date().toISOString(), answers }, null, 2);
     if (json.length > 100_000) return;
@@ -198,7 +225,7 @@ ipcMain.handle("save-answers", (_event, answers) => {
 });
 
 // Everything the result screen needs: chain check + the events themselves for the timeline.
-ipcMain.handle("session-report", () => {
+handle("session-report", () => {
     if (!sessionDir) return null;
     const text = fs.readFileSync(path.join(sessionDir, "events.jsonl"), "utf8");
     const events = text.split("\n").filter(Boolean).flatMap((line) => {
@@ -207,9 +234,22 @@ ipcMain.handle("session-report", () => {
     return { chain: verifyChain(text), events };
 });
 
-ipcMain.handle("open-session", () => sessionDir && shell.openPath(sessionDir));
+handle("open-session", () => sessionDir && shell.openPath(sessionDir));
 
 app.whenReady().then(() => {
+    // app://bundle/<path> → dist/<path>, never anything outside dist.
+    protocol.handle("app", (request) => {
+        const file = path.join(DIST_DIR, decodeURIComponent(new URL(request.url).pathname));
+        if (!file.startsWith(DIST_DIR + path.sep)) return new Response("Not found", { status: 404 });
+        return net.fetch(pathToFileURL(file).toString());
+    });
+
+    // Only camera + microphone, and only for our own page.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+        callback(permission === "media" && isOurs(details.requestingUrl));
+    });
+    session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permission === "media" && isOurs(origin));
+
     screen.on("display-added", () => examActive && writeLog({ type: "display-added" }));
     createWindow();
 });

@@ -9,7 +9,8 @@
     "electron": "electron .",
     "build": "vite build",
     "test": "node --test",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "e2e:dist": "vite build && node scripts/e2e.mjs --dist"
   },
   "dependencies": {
     "react": "^19.3.1",

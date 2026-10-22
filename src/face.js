@@ -17,13 +17,17 @@ export async function loadFaceDetector() {
 }
 
 // Fires once when "no face" or "2+ faces" has lasted its limit; re-arms when the condition changes.
+// A bad episode only ends after clearMs of good frames, so detector flicker can't reset the timer.
 // ponytail: limits are fixed; look-aways shorter than missingMs are ignored on purpose
-export function createFaceRule({ missingMs = 5000, multipleMs = 2000 } = {}) {
+export function createFaceRule({ missingMs = 5000, multipleMs = 2000, clearMs = 1500 } = {}) {
   let state = null
   let since = 0
+  let lastBad = 0
   let fired = false
   return (faces, now) => {
-    const next = faces === 0 ? 'no face' : faces > 1 ? 'multiple faces' : null
+    const seen = faces === 0 ? 'no face' : faces > 1 ? 'multiple faces' : null
+    if (seen) lastBad = now
+    const next = seen ?? (state && now - lastBad < clearMs ? state : null)
     if (next !== state) {
       state = next
       since = now
