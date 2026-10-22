@@ -22,6 +22,12 @@ test('flickering detections do not reset the timer', () => {
   assert.deepEqual(run(rule, flicker), ['no face'])
 })
 
+test('alternating no-face / two-faces is one episode, not a reset each time', () => {
+  const rule = createFaceRule({ missingMs: 5000, multipleMs: 2000 })
+  const helper = Array.from({ length: 10 }, (_, i) => [i % 2 ? 2 : 0, i * 500]) // 0,2,0,2… every 500 ms
+  assert.deepEqual(run(rule, helper), ['multiple faces'])
+})
+
 test('multiple faces use their own, shorter limit', () => {
   const rule = createFaceRule({ missingMs: 5000, multipleMs: 2000 })
   assert.deepEqual(run(rule, [[2, 0], [2, 1999], [3, 2000]]), ['multiple faces'])

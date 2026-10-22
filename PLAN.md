@@ -45,8 +45,13 @@ mic loudness spikes (Web Audio RMS), post-exam HTML timeline report.
 - [ ] Server anchoring: send final log hash + entry count with the submission (backend)
 
 ## Day 3 — Exam flow + Polish + Ship
-- [ ] Exam UI: questions, countdown timer, autosave, submit / auto-submit on threshold
-- [ ] Stretch: face detection, mic level
-- [ ] Post-exam report: timeline of events, score graph, chain-verification result
-- [ ] Security pass: CSP, sandbox, validate IPC inputs
-- [ ] Package with electron-forge (dmg/exe), demo script, README screenshots
+- [x] Exam UI: questions, countdown timer, auto-submit at time-up, autosave (`answers.json`)
+- [x] Face detection: MediaPipe on-device; no face 5 s / 2+ faces 2 s → warning, 3rd = UFM
+- [x] Post-exam report: integrity graph, event timeline, chain check, open session folder
+- [x] Security pass: app:// origin, CSP, IPC origin guard, permission handler, fuses, no debugger
+- [x] Package with electron-forge → DMG (ad-hoc signed)
+- [x] End-to-end run: `npm run e2e` / `npm run e2e:dist`
+- [ ] Auto-submit on low integrity — not decided; score is informational today
+- [ ] Developer ID signing + notarization (needs an Apple developer account)
+- [ ] Windows build (maker-squirrel) — not set up
+- [ ] Server: grading, answer key off the client, log anchoring (backend)

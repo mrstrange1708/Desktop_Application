@@ -16,25 +16,35 @@ export async function loadFaceDetector() {
   )
 }
 
-// Fires once when "no face" or "2+ faces" has lasted its limit; re-arms when the condition changes.
-// A bad episode only ends after clearMs of good frames, so detector flicker can't reset the timer.
+// One "bad episode" = any run of frames without exactly one face. It only ends after clearMs of
+// good frames, so neither detector flicker nor switching between 0 and 2+ faces resets it.
+// Fires "multiple faces" once 2+ faces were first seen multipleMs ago, "no face" once the episode
+// is missingMs old; each at most once per episode.
 // ponytail: limits are fixed; look-aways shorter than missingMs are ignored on purpose
 export function createFaceRule({ missingMs = 5000, multipleMs = 2000, clearMs = 1500 } = {}) {
-  let state = null
-  let since = 0
+  let start = null // episode start, null = all good
+  let multipleSince = null
   let lastBad = 0
-  let fired = false
+  let fired = new Set()
   return (faces, now) => {
-    const seen = faces === 0 ? 'no face' : faces > 1 ? 'multiple faces' : null
-    if (seen) lastBad = now
-    const next = seen ?? (state && now - lastBad < clearMs ? state : null)
-    if (next !== state) {
-      state = next
-      since = now
-      fired = false
+    if (faces !== 1) {
+      if (start === null) {
+        start = now
+        multipleSince = null
+        fired = new Set()
+      }
+      if (faces > 1) multipleSince ??= now
+      lastBad = now
+    } else if (start !== null && now - lastBad >= clearMs) {
+      start = null
     }
-    if (!state || fired || now - since < (state === 'no face' ? missingMs : multipleMs)) return null
-    fired = true
-    return state
+    if (start === null) return null
+
+    const kind = multipleSince !== null && now - multipleSince >= multipleMs ? 'multiple faces'
+      : now - start >= missingMs ? 'no face'
+        : null
+    if (!kind || fired.has(kind)) return null
+    fired.add(kind)
+    return kind
   }
 }
