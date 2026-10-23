@@ -2,6 +2,12 @@
 
 Electron + React (Vite) desktop proctoring app.
 
+## Download
+
+[**Exam Proctor 0.1.0 for macOS (Apple Silicon), 87 MB DMG**](https://github.com/mrstrange1708/Desktop_Application/releases/download/v0.1.0/Exam.Proctor-0.1.0-arm64.dmg)
+from [Releases](https://github.com/mrstrange1708/Desktop_Application/releases/tag/v0.1.0).
+Install: drag to Applications, then right-click → Open the first time (it is not notarized).
+
 ## Run (two terminals)
 
 ```bash
